@@ -1,0 +1,118 @@
+services:
+  whatsapp-producer:
+    image: docker.io/signoskionetworks/kio-whatsapp-api:latest
+    hostname: whatsapp-service-producer
+    ports: 
+      - "13000:${WHATSAPP_APP_SERVER_PORT}"
+    depends_on: 
+      whatsapp-db-postgresql:
+        condition: service_healthy
+        restart: true
+      whatsapp-rabbitmq:
+        condition: service_healthy
+        restart: true
+    links: 
+      - whatsapp-db-postgresql
+      - whatsapp-rabbitmq
+    environment:
+      DB_HOST: ${WHATSAPP_BD_HOST}
+      DB_PASSWORD: ${WHATSAPP_BD_PASS}
+      DB_PORT: ${WHATSAPP_BD_PORT}
+      DB_INSTANCE: ${WHATSAPP_BD_INSTANCE}
+      DB_USER: ${WHATSAPP_BD_USER}
+      SESSION_WA_DEFAULT_PATH: ${WHATSAPP_APP_SESSION}
+      IMAGES_PATH: ${WHATSAPP_APP_IMAGES}
+      LOG_LEVEL: ${WHATSAPP_APP_LOG_LEVEL}
+      LOG_PATH: ${WHATSAPP_APP_LOG_PATH}
+      MAIL_USER: ${WHATSAPP_APP_MAIL_USER}
+      MAIL_PASS: ${WHATSAPP_APP_MAIL_PASS}
+      MQ_HOST: ${WHATSAPP_MQ_HOST}
+      MQ_USER: ${WHATSAPP_MQ_USER}
+      MQ_PASS: ${WHATSAPP_MQ_PASS}
+      MQ_PORT: ${WHATSAPP_MQ_PORT}
+      MQ_QUEUE_NAME: ${WHATSAPP_MQ_NAME}
+    volumes:
+      - ${VOL_WHATSAPP_SESSION}:${WHATSAPP_APP_SESSION}
+      - ${VOL_WHATSAPP_IMAGES}:${WHATSAPP_APP_IMAGES}
+      - ${VOL_WHATSAPP_LOGS}:${WHATSAPP_APP_LOG_PATH}
+  
+  whatsapp-consumer: 
+    image: docker.io/signoskionetworks/kio-whatsapp-processor:latest
+    hostname: whatsapp-service-consumer
+    depends_on: 
+      whatsapp-db-postgresql:
+        condition: service_healthy
+        restart: true
+      whatsapp-rabbitmq:
+        condition: service_healthy
+        restart: true
+    links: 
+      - whatsapp-db-postgresql
+      - whatsapp-rabbitmq
+    environment:
+      DB_HOST: ${WHATSAPP_BD_HOST}
+      DB_PASSWORD: ${WHATSAPP_BD_PASS}
+      DB_PORT: ${WHATSAPP_BD_PORT}
+      DB_INSTANCE: ${WHATSAPP_BD_INSTANCE}
+      DB_USER: ${WHATSAPP_BD_USER}
+      SESSION_WA_DEFAULT_PATH: ${WHATSAPP_APP_SESSION}
+      IMAGES_PATH: ${WHATSAPP_APP_IMAGES}
+      LOG_LEVEL: ${WHATSAPP_APP_LOG_LEVEL}
+      LOG_PATH: ${WHATSAPP_APP_LOG_PATH}
+      MAIL_USER: ${WHATSAPP_APP_MAIL_USER}
+      MAIL_PASS: ${WHATSAPP_APP_MAIL_PASS}
+      MQ_HOST: ${WHATSAPP_MQ_HOST}
+      MQ_USER: ${WHATSAPP_MQ_USER}
+      MQ_PASS: ${WHATSAPP_MQ_PASS}
+      MQ_PORT: ${WHATSAPP_MQ_PORT}
+      MQ_QUEUE_NAME: ${WHATSAPP_MQ_NAME}
+    volumes:
+      - ${VOL_WHATSAPP_SESSION}:${WHATSAPP_APP_SESSION}
+      - ${VOL_WHATSAPP_IMAGES}:${WHATSAPP_APP_IMAGES}
+      - ${VOL_WHATSAPP_LOGS}:${WHATSAPP_APP_LOG_PATH}
+
+  whatsapp-rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${MQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${MQ_PASS}
+    ports:
+      - "28080:${MQ_PORT_ADMIN}"
+    volumes:
+      - ${VOL_MQ}:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  whatsapp-db-adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 13001:8080
+
+  whatsapp-db-postgresql:
+    image: postgres 
+    shm_size: 128mb
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_USER: ${PG_USERNAME}
+      POSTGRES_DB: ${PG_DATABASE}
+      PGDATA: ${PG_DATA}
+      PGPORT: ${PG_PORT}
+      PG_CUSTOM_USER: ${WHATSAPP_BD_USER}
+      PG_CUSTOM_PASS: ${WHATSAPP_BD_PASS}
+      PG_CUSTOM_DB: ${WHATSAPP_BD_INSTANCE}
+    volumes:
+      - ${VOL_DB_DATA}:${PG_DATA}
+      - ${VOL_DB_RESTORE}:/docker-entrypoint-initdb.d
+    ports:
+      - "${PG_PORT}:${PG_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USERNAME} -d ${PG_DATABASE}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
